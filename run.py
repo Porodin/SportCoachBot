@@ -1,72 +1,58 @@
-import requests
-import telebot
+import asyncio
 
-from aiogram import Dispatcher
-from telebot import types
-from bs4 import BeautifulSoup
+from aiogram import Bot, Dispatcher, types, F
+from aiogram.filters import CommandStart
+from aiogram.types import Message, CallbackQuery
+
 Token_API = "6645247048:AAFYx8UJ9A8oDyFnBVHbJ8uVntpBTyBYNEE"
-
-bot = telebot.TeleBot(Token_API)
-
+bot = Bot(Token_API)
 dp = Dispatcher()
-#Обработчик событий
-
-markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-button1 = types.KeyboardButton("🙂да")
-button2 = types.KeyboardButton("😔нет")
-
-markup.add(button1, button2)
-
-@bot.message_handler(commands=['start'])
-def welcome(message):
-    bot.send_message(message.chat.id, f'Приветствую тебя, {message.from_user.first_name}! Я бот, который позволит тебе выбрать товар, по интересующей тебя категории в таких интернет-магазинах как:<b> <a href="https://www.sportmaster.ru"> Спортмастер</a></b>, <b> <a href="https://www.ozon.ru">Ozon</a></b>, <b> <a href="https://www.wildberries.ru">Wildberries</a></b>'
-    'Открыть список категорий?',
-    parse_mode="HTML", disable_web_page_preview=True, reply_markup=markup)
-
-@bot.message_handler(content_types=['text'])
-def choiceandparcing(message):
-    if message.chat.type == 'private':
-        if message.text == '🙂да':
-           markup = types.InlineKeyboardMarkup(row_width=2)
-           button1 = types.InlineKeyboardButton('гантели', callback_data='dumbbells')
-           button2 = types.InlineKeyboardButton('грифы', callback_data='rods')
-           button3 = types.InlineKeyboardButton('эспандеры', callback_data='expanders')
-           button4 = types.InlineKeyboardButton('гири', callback_data='weights')
-           markup.add(button1, button2, button3, button4)
-           bot.send_message(message.chat.id, 'выберите категорию товара', reply_markup=markup)
-        elif message.text == '😔нет':
-          bot.send_message(message.chat.id, 'Значит в другой раз')
-        else:
-          bot.send_message(message.chat.id, 'Не знаю, что ответить')
-
-@bot.callback_query_handler(func=lambda call:True)
-def collback_inline(call):
-    print('')
-    if call.message:
-        print(call.data)
-        if call.data == 'dumbbells':
-            print(1)
-            link = "https://www.sportmaster.ru/"
-            url = "https://www.sportmaster.ru/catalog/vidy_sporta_/trening/svobodnyy_ves/"
-            responce = requests.get(url)
-            soup = BeautifulSoup(responce.text, "html.parser")
-            section = soup.find_all("div", class_="sm-product-grid sm-product-grid--size-xs")
-            for products in section:
-                product = products.find_all("div", class_="product-card")
-                for item in product:
-                    product_name = item.find("span", class_="car-block-title").get_text(strip=True)
-                    product_price = item.find("div", class_="price hvr-sweep-to-right").get_text(strip=True)
-                    product_link = link + item.find("a", class_="product_list_img").get("href")
-                    all_poducts = f"{product_name}\n Цена: {product_price}\n Ссылка: {product_link}"
-                    bot.send_message(call.message.chat.id, all_poducts)
 
 
+@dp.message(CommandStart())
+async def command_start_handler(message: Message):
+    await message.answer(
+        f'Приветствую тебя, {message.from_user.first_name}! Я бот, который позволит тебе выбрать товар, по интересующей тебя категории в таких интернет-магазинах как:<b> <a href="https://www.sportmaster.ru"> Спортмастер</a></b>, <b> <a href="https://www.ozon.ru">Ozon</a></b>, <b> <a href="https://www.wildberries.ru">Wildberries</a></b>',
+        parse_mode="HTML", disable_web_page_preview=True)
+
+    firstb = types.InlineKeyboardButton(text='🙂да', callback_data='yes')
+    secondb = types.InlineKeyboardButton(text='😔нет', callback_data='no')
+    ikb = types.InlineKeyboardMarkup(inline_keyboard=[[firstb], [secondb]], row_width=2)
+
+    await bot.send_message(chat_id=message.from_user.id, text='Открыть список категорий?', reply_markup=ikb)
 
 
+@dp.callback_query(F.data == 'yes')
+async def process_button_1_press(callback_query: types.CallbackQuery):
+    if callback_query.message.text != 'yes':
+        kb = [
+            [
+                types.KeyboardButton(text="гантели"),
+                types.KeyboardButton(text="гири"),
+                types.KeyboardButton(text="грифы")
+
+            ],
+        ]
+        keyboard = types.ReplyKeyboardMarkup(
+            keyboard=kb,
+            resize_keyboard=True,
+            input_field_placeholder="Выберите категорию интересующего вас товара"
+        )
+        await callback_query.message.answer('Список всех категорий...', reply_markup=keyboard)
+
+@dp.callback_query(F.data == 'no')
+async def process_button_2_press(callback_query: CallbackQuery):
+    if callback_query.message.text != 'no':
+        await callback_query.message.answer(
+            text='Значит в другой раз')
 
 
+async def main() -> None:
+    # Initialize Bot instance with a default parse mode which will be passed to all API calls
+
+    # And the run events dispatching
+    await dp.start_polling(bot, skipe_updates=True)
 
 
-
-
-bot.polling(none_stop=True)
+if __name__ == "__main__":
+    asyncio.run(main())
